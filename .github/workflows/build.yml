@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -45,5 +48,3 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: dist/${{ matrix.name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
