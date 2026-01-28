@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QSpacerItem, QSizePolicy, QGridLayout, QDialog, QListWidget,
     QListWidgetItem, QDialogButtonBox
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QEvent
 from PyQt6.QtGui import QFont
 
 # Import core logic from vocab_trainer.py
@@ -365,7 +365,8 @@ class AddWordTab(QWidget):
         self.chinese_input = QTextEdit()
         self.chinese_input.setFont(QFont("Arial", 12))
         self.chinese_input.setMinimumHeight(60)
-        self.chinese_input.setPlaceholderText("繁體中文翻譯...")
+        self.chinese_input.setPlaceholderText("繁體中文翻譯... (Ctrl+Enter to add)")
+        self.chinese_input.installEventFilter(self)
         form_layout.addWidget(self.chinese_input, 1, 1)
 
         layout.addLayout(form_layout)
@@ -389,6 +390,14 @@ class AddWordTab(QWidget):
         layout.addWidget(self.status_label)
 
         layout.addStretch()
+
+    def eventFilter(self, obj, event):
+        """Handle Ctrl+Enter in Chinese input to add word."""
+        if obj == self.chinese_input and event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Return and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+                self.add_word()
+                return True
+        return super().eventFilter(obj, event)
 
     def add_word(self):
         """Add the word to the database."""
