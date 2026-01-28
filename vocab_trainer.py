@@ -419,15 +419,13 @@ def get_stats(conn: sqlite3.Connection) -> dict:
     }
 
 
-def add_word_to_db(conn: sqlite3.Connection, word: str, pos: str, meaning: str, chinese: str = '') -> dict:
+def add_word_to_db(conn: sqlite3.Connection, word: str, pos: str = '', meaning: str = '', chinese: str = '') -> dict:
     """
     Add a word to the database.
     Returns dict with 'success' (bool), 'message' (str), 'word_id' (int or None).
     """
     if not word.strip():
         return {'success': False, 'message': 'Word cannot be empty.', 'word_id': None}
-    if not meaning.strip():
-        return {'success': False, 'message': 'Definition cannot be empty.', 'word_id': None}
 
     cursor = conn.cursor()
     try:
@@ -558,6 +556,17 @@ def clear_all_words(conn: sqlite3.Connection) -> dict:
         'message': f"Deleted {count} word{'s' if count != 1 else ''}.",
         'count': count
     }
+
+
+def delete_word_by_id(conn: sqlite3.Connection, word_id: int) -> dict:
+    """
+    Delete a single word from the database by its ID.
+    Returns dict with 'success' (bool).
+    """
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM vocab WHERE id = ?", (word_id,))
+    conn.commit()
+    return {'success': cursor.rowcount > 0}
 
 
 # =============================================================================

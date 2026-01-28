@@ -23,7 +23,8 @@ from PyQt6.QtGui import QFont
 from vocab_trainer import (
     get_connection, lookup_word, lookup_all_meanings, translate_to_chinese,
     format_time_until, get_pending_words, get_all_words, get_stats,
-    add_word_to_db, submit_rating, clear_all_words, LEARNING_STEPS, TEST_MODE
+    add_word_to_db, submit_rating, clear_all_words, delete_word_by_id,
+    LEARNING_STEPS, TEST_MODE
 )
 
 
@@ -350,51 +351,22 @@ class AddWordTab(QWidget):
         word_label.setFont(QFont("Arial", 11))
         form_layout.addWidget(word_label, 0, 0)
 
-        word_input_layout = QHBoxLayout()
         self.word_input = QLineEdit()
         self.word_input.setFont(QFont("Arial", 12))
         self.word_input.setPlaceholderText("Enter a word...")
-        self.word_input.returnPressed.connect(self.lookup_definition)
-        word_input_layout.addWidget(self.word_input)
-
-        self.lookup_btn = QPushButton("Lookup")
-        self.lookup_btn.setFont(QFont("Arial", 11))
-        self.lookup_btn.clicked.connect(self.lookup_definition)
-        word_input_layout.addWidget(self.lookup_btn)
-        form_layout.addLayout(word_input_layout, 0, 1)
-
-        # POS input
-        pos_label = QLabel("Part of Speech:")
-        pos_label.setFont(QFont("Arial", 11))
-        form_layout.addWidget(pos_label, 1, 0)
-
-        self.pos_combo = QComboBox()
-        self.pos_combo.setFont(QFont("Arial", 11))
-        self.pos_combo.setEditable(True)
-        self.pos_combo.addItems(["", "noun", "verb", "adjective", "adverb", "preposition", "conjunction", "interjection"])
-        form_layout.addWidget(self.pos_combo, 1, 1)
-
-        # Definition input
-        def_label = QLabel("Definition:")
-        def_label.setFont(QFont("Arial", 11))
-        form_layout.addWidget(def_label, 2, 0, Qt.AlignmentFlag.AlignTop)
-
-        self.definition_input = QTextEdit()
-        self.definition_input.setFont(QFont("Arial", 11))
-        self.definition_input.setMinimumHeight(80)
-        self.definition_input.setPlaceholderText("Enter definition...")
-        form_layout.addWidget(self.definition_input, 2, 1)
+        self.word_input.returnPressed.connect(self.add_word)
+        form_layout.addWidget(self.word_input, 0, 1)
 
         # Chinese translation input
         chinese_label = QLabel("Chinese (繁體):")
         chinese_label.setFont(QFont("Arial", 11))
-        form_layout.addWidget(chinese_label, 3, 0, Qt.AlignmentFlag.AlignTop)
+        form_layout.addWidget(chinese_label, 1, 0, Qt.AlignmentFlag.AlignTop)
 
         self.chinese_input = QTextEdit()
         self.chinese_input.setFont(QFont("Arial", 12))
         self.chinese_input.setMinimumHeight(60)
         self.chinese_input.setPlaceholderText("繁體中文翻譯...")
-        form_layout.addWidget(self.chinese_input, 3, 1)
+        form_layout.addWidget(self.chinese_input, 1, 1)
 
         layout.addLayout(form_layout)
 
@@ -418,77 +390,12 @@ class AddWordTab(QWidget):
 
         layout.addStretch()
 
-    def lookup_definition(self):
-        """Look up word using Free Dictionary API and auto-select top 5 definitions."""
-        word = self.word_input.text().strip()
-        if not word:
-            self.status_label.setText("Please enter a word first.")
-            self.status_label.setStyleSheet("color: red;")
-            return
-
-        self.status_label.setText("Looking up definition...")
-        self.status_label.setStyleSheet("color: #666;")
-        QApplication.processEvents()
-
-        # Use Free Dictionary API for multiple meanings
-        meanings = lookup_all_meanings(word)
-
-        if meanings:
-            # Auto-select top 5 definitions (or all if fewer than 5)
-            top_meanings = meanings[:5]
-
-            # Collect all unique POS
-            all_pos = []
-            for m in top_meanings:
-                if m['pos'] and m['pos'] not in all_pos:
-                    all_pos.append(m['pos'])
-            pos_text = '/'.join(all_pos)
-
-            # Format definitions with numbers
-            definition_lines = []
-            for i, m in enumerate(top_meanings, 1):
-                pos_tag = f"({m['pos']}) " if m['pos'] else ""
-                definition_lines.append(f"{i}. {pos_tag}{m['definition']}")
-
-            combined_definition = '\n'.join(definition_lines)
-
-            self.pos_combo.setCurrentText(pos_text)
-            self.definition_input.setPlainText(combined_definition)
-
-            # Translate all definitions in one API call (faster)
-            self.status_label.setText("Translating to Chinese...")
-            QApplication.processEvents()
-
-            # Combine definitions with delimiter for single API call
-            all_defs = ' | '.join([m['definition'] for m in top_meanings])
-            combined_chinese = translate_to_chinese(all_defs)
-
-            if combined_chinese:
-                # Split back and format with numbers
-                # Handle various delimiter formats: | ｜ (full-width) with/without spaces
-                import re
-                chinese_parts = re.split(r'\s*[|｜]\s*', combined_chinese)
-                chinese_lines = [f"{i}. {part.strip()}" for i, part in enumerate(chinese_parts, 1) if part.strip()]
-                self.chinese_input.setPlainText('\n'.join(chinese_lines))
-            else:
-                self.chinese_input.setPlainText('')
-
-            self.status_label.setText(f"Found {len(meanings)} meaning(s) - top {len(top_meanings)} selected!")
-            self.status_label.setStyleSheet("color: green;")
-            return
-
-        # Word not found
-        self.status_label.setText("Word not found. Please enter manually.")
-        self.status_label.setStyleSheet("color: orange;")
-
     def add_word(self):
         """Add the word to the database."""
         word = self.word_input.text().strip()
-        pos = self.pos_combo.currentText().strip()
-        definition = self.definition_input.toPlainText().strip()
         chinese = self.chinese_input.toPlainText().strip()
 
-        result = add_word_to_db(self.conn, word, pos, definition, chinese)
+        result = add_word_to_db(self.conn, word, '', '', chinese)
 
         if result['success']:
             self.status_label.setText(result['message'])
@@ -504,8 +411,6 @@ class AddWordTab(QWidget):
     def clear_form(self):
         """Clear all form inputs."""
         self.word_input.clear()
-        self.pos_combo.setCurrentIndex(0)
-        self.definition_input.clear()
         self.chinese_input.clear()
         self.word_input.setFocus()
 
@@ -548,6 +453,11 @@ class WordListTab(QWidget):
         refresh_btn.clicked.connect(self.refresh)
         header_layout.addWidget(refresh_btn)
 
+        self.delete_btn = QPushButton("Delete")
+        self.delete_btn.setFont(QFont("Arial", 10))
+        self.delete_btn.clicked.connect(self.delete_selected_word)
+        header_layout.addWidget(self.delete_btn)
+
         self.clean_btn = QPushButton("Clean List")
         self.clean_btn.setFont(QFont("Arial", 10))
         self.clean_btn.setStyleSheet("background-color: #ffcccc;")
@@ -583,8 +493,9 @@ class WordListTab(QWidget):
         self.table.setRowCount(len(words))
 
         for row, word in enumerate(words):
-            # Word
+            # Word (store ID as user data)
             item = QTableWidgetItem(word['word'])
+            item.setData(Qt.ItemDataRole.UserRole, word['id'])
             self.table.setItem(row, 0, item)
 
             # POS
@@ -619,6 +530,36 @@ class WordListTab(QWidget):
             search_lower = search_text.lower()
             filtered = [w for w in self.all_words if search_lower in w['word'].lower() or search_lower in w.get('meaning', '').lower()]
             self.display_words(filtered)
+
+    def delete_selected_word(self):
+        """Delete the currently selected word."""
+        selected_row = self.table.currentRow()
+        if selected_row < 0:
+            QMessageBox.information(self, "Delete", "Please select a word to delete.")
+            return
+
+        item = self.table.item(selected_row, 0)
+        if not item:
+            return
+
+        word_id = item.data(Qt.ItemDataRole.UserRole)
+        word_text = item.text()
+
+        reply = QMessageBox.warning(
+            self,
+            "Confirm Delete",
+            f"Are you sure you want to delete '{word_text}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            result = delete_word_by_id(self.conn, word_id)
+            if result['success']:
+                self.refresh()
+                # Notify parent to refresh other tabs
+                if hasattr(self.parent(), 'refresh_all_tabs'):
+                    self.parent().refresh_all_tabs()
 
     def show_clean_confirm(self):
         """Show confirmation dialog before cleaning the word list."""
